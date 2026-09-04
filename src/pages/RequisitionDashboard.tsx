@@ -2,10 +2,10 @@ import { FormEvent, useEffect, useState } from "react";
 import {
   Search,
   Plus,
-  Eye,
   Pencil,
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
   X,
 } from "lucide-react";
 import { api, Requisition } from "../services/api";
@@ -40,26 +40,19 @@ const formatDate = (value?: string) => {
   const yearPart = parts.find((part) => part.type === "year")?.value || "";
   return `${dayPart} ${monthPart} ${yearPart}`;
 };
-const firstDetail = (item: Requisition) => item.detalles?.[0];
-const displayStatus = (item: Requisition) =>
-  item.estado === "ANULADO" ? "ANULADO" : "ACTIVO";
-const materialGroup = (name: string) => {
-  const value = name.toUpperCase();
+const displayStatus = (item: Requisition) => item.estado || "PENDIENTE";
+// Grupo estimado por palabra clave (el backend aún no tiene maestro de
+// grupos; cuando exista, reemplazar por el dato real).
+const groupOf = (name: string) => {
+  const value = (name || "").toUpperCase();
   if (value.includes("TAMBOR")) return "Tambores";
-  if (value.includes("ABRAZADERA")) return "Abrazaderas";
   if (value.includes("PALLET")) return "Pallets";
   if (value.includes("ACEITE")) return "Aceites";
+  if (value.includes("ABRAZADERA")) return "Abrazaderas";
   return "Materiales";
 };
-const currency = (value?: number) =>
-  value == null
-    ? "—"
-    : new Intl.NumberFormat("es-PE", {
-        style: "currency",
-        currency: "PEN",
-      }).format(value);
-const formatUnit = (unit?: string) =>
-  (unit || "").toUpperCase().replace("C/U", "C/U");
+const qty = (cantid?: number, unidad?: string) =>
+  `${Number(cantid || 0).toLocaleString("es-PE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${unidad || ""}`.trim();
 
 export default function RequisitionDashboard({
   session,
@@ -75,6 +68,11 @@ export default function RequisitionDashboard({
   const [query, setQuery] = useState("");
   const [center, setCenter] = useState("");
   const [status, setStatus] = useState("");
+  const [prio, setPrio] = useState("");
+  const [fecIni, setFecIni] = useState("");
+  const [fecFin, setFecFin] = useState("");
+  const [centers, setCenters] = useState<{ ccodCencos: string; nomCencos: string }[]>([]);
+  const [priorities, setPriorities] = useState<{ cvalor: string; cnomValor: string }[]>([]);
   const [loading, setLoading] = useState(true);
   const [notice, setNotice] = useState("");
   const [editor, setEditor] = useState<Requisition | "new" | null>(null);
@@ -86,13 +84,18 @@ export default function RequisitionDashboard({
     {},
   );
   const [centerNames, setCenterNames] = useState<Record<string, string>>({});
+  const [personNames, setPersonNames] = useState<Record<string, string>>({});
+  const [prioNames, setPrioNames] = useState<Record<string, string>>({});
 
   async function load() {
     setLoading(true);
     try {
       const result = await api.list(session.sociedadActual, page, 10, query, {
-        cencos: center,
-        estado: status === "ACTIVO" ? "" : status,
+        cencos: center || undefined,
+        estado: status || undefined,
+        prio: prio || undefined,
+        fecIni: fecIni ? `${fecIni}T00:00:00` : undefined,
+        fecFin: fecFin ? `${fecFin}T23:59:59` : undefined,
       });
       setItems(result.content || []);
       setPages(result.totalPages || 0);
@@ -106,7 +109,29 @@ export default function RequisitionDashboard({
 
   useEffect(() => {
     load();
-  }, [page, center, status]);
+  }, [page, center, status, prio, fecIni, fecFin]);
+  useEffect(() => {
+    api.centers(session.sociedadActual).then(setCenters).catch(() => []);
+    api
+      .priorities(session.sociedadActual)
+      .then((values) => {
+        setPriorities(values);
+        setPrioNames(
+          Object.fromEntries(values.map((v) => [v.cvalor, v.cnomValor])),
+        );
+      })
+      .catch(() => []);
+    api
+      .people(session.sociedadActual)
+      .then((values) =>
+        setPersonNames(
+          Object.fromEntries(
+            values.map((value) => [value.ccodPerson, value.nomPerson]),
+          ),
+        ),
+      )
+      .catch(() => undefined);
+  }, [session.sociedadActual]);
   useEffect(() => {
     api
       .centers(session.sociedadActual)
@@ -123,22 +148,13 @@ export default function RequisitionDashboard({
       .then((values) =>
         setSupplierNames(
           Object.fromEntries(
-            values.map((value) => {
-              const code =
-                value.ccodProveedor || value.codigo || Object.values(value)[0];
-              return [
-                code,
-                value.nomProv ||
-                  value.nombre ||
-                  Object.values(value)[1] ||
-                  code,
-              ];
-            }),
+            values.map((value) => [value.ccodProveedor, value.nomProv]),
           ),
         ),
       )
       .catch(() => undefined);
   }, [session.sociedadActual]);
+  // Nombres de materiales para la columna Material (nombre + código).
   useEffect(() => {
     const codes = [
       ...new Set(
@@ -150,19 +166,14 @@ export default function RequisitionDashboard({
         ),
       ),
     ] as string[];
+    const missing = codes.filter((c) => !materialNames[c]);
+    if (missing.length === 0) return;
     Promise.all(
-      codes.map(async (code) => {
+      missing.map(async (code) => {
         try {
           const values = await api.materials(code);
-          const match = values.find(
-            (value) =>
-              (value.codMaterial || value.codigo || Object.values(value)[0]) ===
-              code,
-          );
-          return [
-            code,
-            match?.nomMaterial || match?.descripcion || match?.nombre || code,
-          ] as const;
+          const match = values.find((value) => value.codMaterial === code);
+          return [code, match?.nomMaterial || code] as const;
         } catch {
           return [code, code] as const;
         }
@@ -173,42 +184,7 @@ export default function RequisitionDashboard({
         ...Object.fromEntries(values),
       })),
     );
-  }, [items]);
-  useEffect(() => {
-    const codes = [
-      ...new Set(
-        items.flatMap(
-          (item) =>
-            item.detalles
-              ?.map((detail) => detail.codMaterial)
-              .filter(Boolean) || [],
-        ),
-      ),
-    ] as string[];
-    if (!codes.length) return;
-    Promise.all(
-      codes.map(async (code) => {
-        try {
-          const results = await api.materials(code);
-          const match = results.find(
-            (item) =>
-              (item.codMaterial || item.codigo || Object.values(item)[0]) ===
-              code,
-          );
-          return [
-            code,
-            match?.nomMaterial || match?.descripcion || match?.nombre || code,
-          ] as const;
-        } catch {
-          return [code, code] as const;
-        }
-      }),
-    ).then((entries) =>
-      setMaterialNames((current) => ({
-        ...current,
-        ...Object.fromEntries(entries),
-      })),
-    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [items]);
 
   function search(event: FormEvent) {
@@ -221,6 +197,9 @@ export default function RequisitionDashboard({
     setQuery("");
     setCenter("");
     setStatus("");
+    setPrio("");
+    setFecIni("");
+    setFecFin("");
     setPage(0);
   }
 
@@ -233,24 +212,12 @@ export default function RequisitionDashboard({
     }
   }
 
-  async function remove(action: "cancel" | "delete") {
-    if (
-      !selected?.nroDoc ||
-      !confirm(
-        action === "cancel"
-          ? "¿Anular esta requisición?"
-          : "¿Eliminar esta requisición?",
-      )
-    )
-      return;
+  async function cancelDoc() {
+    if (!selected?.nroDoc || !confirm("¿Anular esta requisición?")) return;
     try {
-      if (action === "cancel")
-        await api.cancel(session.sociedadActual, selected.nroDoc);
-      else await api.remove(session.sociedadActual, selected.nroDoc);
+      await api.cancel(session.sociedadActual, selected.nroDoc);
       setSelected(null);
-      setNotice(
-        action === "cancel" ? "Requisición anulada." : "Requisición eliminada.",
-      );
+      setNotice("Requisición anulada.");
       load();
     } catch {
       setNotice("La operación no pudo completarse.");
@@ -272,6 +239,12 @@ export default function RequisitionDashboard({
           setEditor(null);
           setSelected(null);
           setNotice("Requisición guardada correctamente.");
+          load();
+        }}
+        onDeleted={() => {
+          setEditor(null);
+          setSelected(null);
+          setNotice("Requisición eliminada correctamente.");
           load();
         }}
       />
@@ -325,26 +298,42 @@ export default function RequisitionDashboard({
                   onChange={(event) => setCenter(event.target.value)}
                 >
                   <option value="">Todos</option>
-                  <option value="01">01</option>
-                  <option value="02">02</option>
-                  <option value="03">03</option>
+                  {centers.map((c) => (
+                    <option key={c.ccodCencos} value={c.ccodCencos}>
+                      {c.ccodCencos} - {c.nomCencos}
+                    </option>
+                  ))}
                 </select>
               </label>
               <label>
-                Fecha de doc. fin
-                <input type="date" />
+                Prioridad
+                <select
+                  value={prio}
+                  onChange={(event) => setPrio(event.target.value)}
+                >
+                  <option value="">Todas</option>
+                  {priorities.map((p) => (
+                    <option key={p.cvalor} value={p.cvalor}>
+                      {p.cnomValor}
+                    </option>
+                  ))}
+                </select>
               </label>
               <label>
-                Fecha de req. ini
-                <input type="date" />
+                Fecha doc. ini
+                <input
+                  type="date"
+                  value={fecIni}
+                  onChange={(event) => setFecIni(event.target.value)}
+                />
               </label>
               <label>
-                Fecha de req. fin
-                <input type="date" />
-              </label>
-              <label>
-                Cod. persona
-                <input placeholder="Código de personal" />
+                Fecha doc. fin
+                <input
+                  type="date"
+                  value={fecFin}
+                  onChange={(event) => setFecFin(event.target.value)}
+                />
               </label>
               <label>
                 Estado
@@ -353,7 +342,7 @@ export default function RequisitionDashboard({
                   onChange={(event) => setStatus(event.target.value)}
                 >
                   <option value="">Todos</option>
-                  <option value="ACTIVO">ACTIVO</option>
+                  <option value="PENDIENTE">PENDIENTE</option>
                   <option value="ANULADO">ANULADO</option>
                 </select>
               </label>
@@ -379,7 +368,16 @@ export default function RequisitionDashboard({
             <div className="history-table-head">
               <div>
                 <h2>Requisiciones</h2>
-                <small>{total} registro(s) encontrados</small>
+                <small>
+                  {total} requisición{total === 1 ? "" : "es"} ·{" "}
+                  {
+                    items.reduce(
+                      (n, item) => n + (item.detalles?.length || 0),
+                      0,
+                    )
+                  }{" "}
+                  posición(es) en esta página
+                </small>
               </div>
               <button
                 className="history-create-link"
@@ -395,15 +393,15 @@ export default function RequisitionDashboard({
                     <th className="select-column">
                       <input type="checkbox" aria-label="Seleccionar todas" />
                     </th>
-                    <th>Posición ↕</th>
+                    <th>Posición</th>
                     <th>Material</th>
                     <th>Grupo de productos</th>
                     <th>Cantidad</th>
-                    <th>Valor total</th>
-                    <th>Proveedor</th>
-                    <th>Fecha</th>
+                    <th>Cantidad de pedido</th>
+                    <th>Proveedor asignado</th>
+                    <th>Fecha de entrega</th>
                     <th>Centro</th>
-                    <th>Estado</th>
+                    <th>Estado de procesamiento</th>
                     <th>Acciones</th>
                   </tr>
                 </thead>
@@ -421,88 +419,101 @@ export default function RequisitionDashboard({
                       </td>
                     </tr>
                   ) : (
-                    items.map((item) => {
-                      const detail = firstDetail(item);
-                      const materialCode = detail?.codMaterial;
-                      const materialName = materialCode
-                        ? materialNames[materialCode] || "Cargando material..."
-                        : "Sin material";
-                      const supplierName = item.ccodProveedor
-                        ? supplierNames[item.ccodProveedor] ||
-                          "Cargando proveedor..."
-                        : "Sin proveedor";
-                      const centerName =
-                        centerNames[item.ccodCencos] || item.ccodCencos;
-                      const productCount = item.detalles?.length || 0;
-                      return (
-                        <tr key={item.nroDoc}>
-                          <td className="select-column">
-                            <input
-                              type="checkbox"
-                              aria-label={`Seleccionar ${item.nroDoc}`}
-                            />
-                          </td>
-                          <td>
-                            <strong>
-                              {item.nroDoc ? `${item.nroDoc}/10` : "—"}
-                            </strong>
-                          </td>
-                          <td>
-                            <a>{materialName}</a>
-                            <small>
-                              {materialCode ? `(${materialCode})` : "—"}
-                            </small>
-                          </td>
-                          <td>
-                            {materialGroup(materialName)}
-                            <small>
-                              {productCount} producto
-                              {productCount === 1 ? "" : "s"}
-                            </small>
-                          </td>
-                          <td>
-                            <strong>
-                              {detail?.cantid || 0}{" "}
-                              {formatUnit(detail?.cUnidad)}
-                            </strong>
-                          </td>
-                          <td>{currency()}</td>
-                          <td>
-                            <strong>{supplierName}</strong>
-                            <small>{item.ccodProveedor || "—"}</small>
-                          </td>
-                          <td>{formatDate(item.fecDoc)}</td>
-                          <td>
-                            <strong>{centerName}</strong>
-                            <small>{item.ccodCencos}</small>
-                          </td>
-                          <td>
-                            <span
-                              className={`blue-status ${item.estado === "ANULADO" ? "cancelled" : ""}`}
+                    items.flatMap((item) =>
+                      (
+                        item.detalles?.length
+                          ? item.detalles
+                          : [{ cUnidad: "", cantid: 0 }]
+                      ).map((detail, di) => {
+                          const materialCode = detail.codMaterial;
+                          const materialName = materialCode
+                            ? materialNames[materialCode] || materialCode
+                            : detail.observ || "Sin material";
+                          const provCode =
+                            detail.ccodProveedor || item.ccodProveedor;
+                          const supplierName = provCode
+                            ? supplierNames[provCode] || provCode
+                            : "—";
+                          const centerName =
+                            centerNames[item.ccodCencos] || item.ccodCencos;
+                          return (
+                            <tr
+                              key={`${item.nroDoc}-${detail.nroItem ?? di}`}
                             >
-                              {displayStatus(item)}
-                            </span>
-                          </td>
-                          <td className="history-actions">
-                            <button
-                              title="Ver requisición"
-                              onClick={() => inspect(item)}
-                            >
-                              <Eye size={15} />
-                            </button>
-                            <button
-                              title="Editar requisición"
-                              onClick={async () => {
-                                await inspect(item);
-                                setEditor(item);
-                              }}
-                            >
-                              <Pencil size={15} />
-                            </button>
-                          </td>
-                        </tr>
-                      );
-                    })
+                              <td className="select-column">
+                                <input
+                                  type="checkbox"
+                                  aria-label={`Seleccionar ${item.nroDoc}`}
+                                />
+                              </td>
+                              <td
+                                className="pos-cell"
+                                style={{
+                                  minWidth: 150,
+                                  whiteSpace: "nowrap",
+                                  overflow: "visible",
+                                }}
+                              >
+                                <strong
+                                  className="pos-doc"
+                                  style={{ whiteSpace: "nowrap" }}
+                                >
+                                  {item.nroDoc || "—"}
+                                </strong>
+                                <small>/{detail.nroItem ?? di + 1}</small>
+                              </td>
+                              <td>
+                                <a>{materialName}</a>
+                                <small>
+                                  {materialCode ? `(${materialCode})` : "—"}
+                                </small>
+                              </td>
+                              <td>{groupOf(materialName)}</td>
+                              <td>
+                                {qty(detail.cantid, detail.cUnidad)}
+                              </td>
+                              <td>
+                                {qty(detail.cantid, detail.cUnidad)}
+                              </td>
+                              <td>
+                                <strong>{supplierName}</strong>
+                                <small>{provCode || "—"}</small>
+                              </td>
+                              <td>{formatDate(item.fecReq)}</td>
+                              <td>
+                                <strong>{centerName}</strong>
+                                <small>{item.ccodCencos}</small>
+                              </td>
+                              <td>
+                                <span
+                                  className={`blue-status ${item.estado === "ANULADO" ? "cancelled" : ""}`}
+                                >
+                                  {item.estado === "ANULADO"
+                                    ? "Anulado"
+                                    : "Pedido creado"}
+                                </span>
+                              </td>
+                              <td className="history-actions">
+                                <button
+                                  title="Editar requisición"
+                                  onClick={async () => {
+                                    await inspect(item);
+                                    setEditor(item);
+                                  }}
+                                >
+                                  <Pencil size={15} />
+                                </button>
+                                <button
+                                  title="Ver detalle"
+                                  onClick={() => inspect(item)}
+                                >
+                                  <ChevronDown size={15} />
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        })
+                    )
                   )}
                 </tbody>
               </table>
@@ -512,7 +523,7 @@ export default function RequisitionDashboard({
                 Página {pages ? page + 1 : 0} de {pages || 1}
               </span>
               <span>
-                Mostrando {items.length} de {total}
+                Mostrando {items.length} de {total} requisiciones
               </span>
               <div>
                 <button disabled={page === 0} onClick={() => setPage(page - 1)}>
@@ -532,10 +543,10 @@ export default function RequisitionDashboard({
       {selected && !editor && (
         <DetailModal
           item={selected}
+          sociedad={session.sociedadActual}
           onClose={() => setSelected(null)}
           onEdit={() => setEditor(selected)}
-          onCancel={() => remove("cancel")}
-          onDelete={() => remove("delete")}
+          onCancel={cancelDoc}
         />
       )}
       {notice && (

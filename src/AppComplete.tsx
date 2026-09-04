@@ -1,23 +1,20 @@
 import { FormEvent, useEffect, useState } from 'react';
-import { api, Detail, Requisition } from './services/api';
-import { Plus, Search, RefreshCw, Eye, Pencil, Ban, Trash2, X, LogOut, ChevronLeft, ChevronRight } from 'lucide-react';
+import { api, Requisition } from './services/api';
+import { Pencil, Ban, X, LogOut } from 'lucide-react';
 import agoraLogo from './assets/logo-agora.svg';
 import indigitalLogo from './assets/logo-indigital.svg';
 import ohLogo from './assets/logo-oh.svg';
 import RequisitionDashboard from './pages/RequisitionDashboard';
-import AppSidebar from './components/AppSidebar';
 
 type Session = { token: string; username: string; sociedades: string[]; sociedadActual: string };
-type FormDetail = Detail & { materialLabel?: string };
-const emptyDetail = (): FormDetail => ({ codMaterial: '', cUnidad: 'UND', cantid: 1, observ: '' });
-const dateForApi = () => new Date().toISOString().slice(0, 19);
 const dateLabel = (value?: string) => value ? (value.includes('/') ? value.split(' ')[0] : new Date(value).toLocaleDateString('es-PE')) : '—';
 const societyLogos: Record<string, string> = { '100': agoraLogo, A13: indigitalLogo, '1100': ohLogo };
 
 function SignIn({ done }: { done: (s: Session) => void }) {
-  const [registerMode, setRegisterMode] = useState(false); const [username, setUsername] = useState(''); const [password, setPassword] = useState(''); const [confirmation, setConfirmation] = useState(''); const [error, setError] = useState(''); const [success, setSuccess] = useState(''); const [busy, setBusy] = useState(false);
-  async function submit(e: FormEvent) { e.preventDefault(); setBusy(true); setError(''); setSuccess(''); try { if (registerMode) { if (password !== confirmation) throw new Error('Las contraseñas no coinciden.'); await api.register(username, password); setSuccess('Usuario registrado. Ya puedes iniciar sesión.'); setRegisterMode(false); setPassword(''); setConfirmation(''); } else { const s = await api.login(username, password); localStorage.setItem('evo_token', s.token); done({ ...s, sociedadActual: '' }); } } catch (err) { setError(err instanceof Error ? err.message : registerMode ? 'No se pudo registrar el usuario.' : 'No se pudo iniciar sesión.'); } finally { setBusy(false); } }
-  return <main className="auth-page"><section className="auth-visual"><div className="brand-mark">e<span>•</span></div><p className="eyebrow">EVOLUTION ERP</p><h1>Compras que<br /><em>evolucionan.</em></h1><p className="visual-copy">Controla tus requisiciones con claridad, trazabilidad y velocidad.</p></section><section className="auth-card"><p className="eyebrow">{registerMode ? 'Crear cuenta' : 'Bienvenido de nuevo'}</p><h2>{registerMode ? 'Registra tu usuario' : 'Ingresa a tu cuenta'}</h2><p className="muted">{registerMode ? 'Tu cuenta se guardará en el sistema.' : 'Accede al módulo de requisiciones.'}</p><form className="form-stack" onSubmit={submit}><label>Usuario<input required minLength={3} maxLength={30} value={username} onChange={e => setUsername(e.target.value)} autoComplete="username" placeholder="Tu usuario" /></label><label>Contraseña<input required minLength={8} type="password" value={password} onChange={e => setPassword(e.target.value)} autoComplete={registerMode ? 'new-password' : 'current-password'} placeholder="Mínimo 8 caracteres" /></label>{registerMode && <label>Confirmar contraseña<input required minLength={8} type="password" value={confirmation} onChange={e => setConfirmation(e.target.value)} autoComplete="new-password" placeholder="Repite tu contraseña" /></label>}{error && <p className="alert error">{error}</p>}{success && <p className="alert success">{success}</p>}<button className="primary-button" disabled={busy}>{busy ? 'Procesando…' : registerMode ? 'Crear usuario' : 'Ingresar al sistema'} →</button></form><button className="link-button" onClick={() => { setRegisterMode(!registerMode); setError(''); setSuccess(''); }}>{registerMode ? 'Ya tengo una cuenta' : 'Crear una cuenta nueva'}</button></section></main>;
+  const [username, setUsername] = useState(''); const [password, setPassword] = useState(''); const [error, setError] = useState(''); const [busy, setBusy] = useState(false);
+  const [expired] = useState(() => { const v = sessionStorage.getItem('evo_expired') === '1'; if (v) sessionStorage.removeItem('evo_expired'); return v; });
+  async function submit(e: FormEvent) { e.preventDefault(); setBusy(true); setError(''); try { const s = await api.login(username, password); localStorage.setItem('evo_token', s.token); done({ ...s, sociedadActual: '' }); } catch (err) { setError(err instanceof Error ? err.message : 'No se pudo iniciar sesión.'); } finally { setBusy(false); } }
+  return <main className="auth-page"><section className="auth-visual"><div className="brand-mark">e<span>•</span></div><p className="eyebrow">EVOLUTION ERP</p><h1>Compras que<br /><em>evolucionan.</em></h1><p className="visual-copy">Controla tus requisiciones con claridad, trazabilidad y velocidad.</p></section><section className="auth-card"><p className="eyebrow">Bienvenido de nuevo</p><h2>Ingresa a tu cuenta</h2><p className="muted">Accede al módulo de requisiciones. Usa tu usuario y contraseña del ERP.</p>{expired && <p className="alert error">Tu sesión expiró. Ingresa nuevamente.</p>}<form className="form-stack" onSubmit={submit}><label>Usuario<input required minLength={3} maxLength={30} value={username} onChange={e => setUsername(e.target.value)} autoComplete="username" placeholder="Tu usuario" /></label><label>Contraseña<input required minLength={8} type="password" value={password} onChange={e => setPassword(e.target.value)} autoComplete="current-password" placeholder="Mínimo 8 caracteres" /></label>{error && <p className="alert error">{error}</p>}<button className="primary-button" disabled={busy}>{busy ? 'Procesando…' : 'Ingresar al sistema'} →</button></form></section></main>;
 }
 
 function Society({ session, done, cancel }: { session: Session; done: (s: Session) => void; cancel: () => void }) {
@@ -26,28 +23,100 @@ function Society({ session, done, cancel }: { session: Session; done: (s: Sessio
   return <main className="picker-page"><div className="picker-card"><div className="brand-mark small">e<span>•</span></div><p className="eyebrow">Configuración de sesión</p><h1>Selecciona una sociedad</h1><p className="muted">Hola, <strong>{session.username}</strong>. Elige el contexto de trabajo.</p><div className="society-list">{session.sociedades.map(s => <button className={`society-option ${s === selected ? 'selected' : ''}`} onClick={() => setSelected(s)} key={s}><span className="society-logo"><img src={societyLogos[s]} alt={`Logo sociedad ${s}`} /></span><span><strong>{s}</strong><small>Sociedad disponible</small></span><i>{s === selected ? '✓' : ''}</i></button>)}</div>{error && <p className="alert error">{error}</p>}<div className="session-actions"><button className="secondary-button logout-session" onClick={cancel}><LogOut size={15} /> Cancelar y cerrar sesión</button><button className="primary-button" disabled={!selected} onClick={select}>Continuar →</button></div></div></main>;
 }
 
-export function RequisitionForm({ session, initial, onClose, onSaved }: { session: Session; initial?: Requisition; onClose: () => void; onSaved: () => void }) {
-  const [center, setCenter] = useState(initial?.ccodCencos || ''); const [priority, setPriority] = useState(initial?.tipPrio || ''); const [place, setPlace] = useState(initial?.lugarEntr || ''); const [observ, setObserv] = useState(initial?.observ || ''); const [details, setDetails] = useState<FormDetail[]>(initial?.detalles || [emptyDetail()]); const [centers, setCenters] = useState<{ ccodCencos: string; nomCencos: string }[]>([]); const [priorities, setPriorities] = useState<Record<string, string>[]>([]); const [materials, setMaterials] = useState<Record<string, string>[]>([]); const [busy, setBusy] = useState(false); const [error, setError] = useState('');
-  useEffect(() => { api.centers(session.sociedadActual).then(setCenters).catch(() => setCenters([])); api.priorities(session.sociedadActual).then(setPriorities).catch(() => setPriorities([])); }, [session.sociedadActual]);
-  function changeDetail(index: number, key: keyof FormDetail, value: string | number) { setDetails(all => all.map((d, i) => i === index ? { ...d, [key]: value } : d)); }
-  async function searchMaterial(index: number, value: string) { changeDetail(index, 'codMaterial', value); if (value.length >= 2) { try { setMaterials(await api.materials(value)); } catch { setMaterials([]); } } }
-  async function save(e: FormEvent) { e.preventDefault(); if (!center || details.some(d => !d.cUnidad || !d.cantid || d.cantid <= 0)) { setError('Completa el centro de costo y los artículos.'); return; } setBusy(true); setError(''); const data: Requisition = { codSociedad: session.sociedadActual, nroDoc: initial?.nroDoc, fecDoc: initial?.fecDoc || dateForApi(), fecReq: initial?.fecReq || dateForApi(), ccodCencos: center, tipPrio: priority, lugarEntr: place, observ, detalles: details.map((d, i) => ({ nroItem: i + 1, codMaterial: d.codMaterial, cUnidad: d.cUnidad, cantid: d.cantid, observ: d.observ })) }; try { if (initial?.nroDoc) await api.update(session.sociedadActual, initial.nroDoc, data); else await api.create(data); onSaved(); } catch (err) { setError(err instanceof Error ? err.message : 'No se pudo guardar.'); } finally { setBusy(false); } }
-  return <div className="modal-backdrop"><section className="modal"><header className="modal-head"><div><p className="eyebrow">{initial ? 'Editar solicitud' : 'Nueva solicitud'}</p><h2>{initial ? `Requisición ${initial.nroDoc}` : 'Registrar requisición'}</h2></div><button className="close-button" onClick={onClose}><X size={19} /></button></header><form onSubmit={save}><div className="modal-grid"><label>Centro de costo<select required value={center} onChange={e => setCenter(e.target.value)}><option value="">Seleccionar…</option>{centers.map(c => <option value={c.ccodCencos} key={c.ccodCencos}>{c.ccodCencos} · {c.nomCencos}</option>)}</select></label><label>Prioridad<select value={priority} onChange={e => setPriority(e.target.value)}><option value="">Normal</option>{priorities.map((p, i) => { const code = p.cvalor ?? p.codConstante ?? p.codigo ?? Object.values(p)[0]; const label = p.cnomValor ?? p.desConstante ?? p.descripcion ?? code; return <option key={i} value={code}>{label}</option>; })}</select></label><label className="wide">Lugar de entrega<input value={place} onChange={e => setPlace(e.target.value)} placeholder="Almacén central" /></label><label className="wide">Observaciones<textarea rows={2} value={observ} onChange={e => setObserv(e.target.value)} /></label></div><div className="details-head"><div><h3>Artículos solicitados</h3><span className="muted">Busca materiales por código o descripción.</span></div><button type="button" className="secondary-button" onClick={() => setDetails([...details, emptyDetail()])}><Plus size={15} /> Añadir artículo</button></div><div className="details-list">{details.map((d, i) => <div className="detail-row" key={i}><span className="item-number">{String(i + 1).padStart(2, '0')}</span><label>Material<input list="material-options" value={d.codMaterial || ''} onChange={e => searchMaterial(i, e.target.value)} placeholder="Código / descripción" /></label><label>Unidad<input required value={d.cUnidad} onChange={e => changeDetail(i, 'cUnidad', e.target.value)} /></label><label>Cantidad<input required min="0.01" step="0.01" type="number" value={d.cantid} onChange={e => changeDetail(i, 'cantid', Number(e.target.value))} /></label>{details.length > 1 && <button type="button" className="remove-button" onClick={() => setDetails(details.filter((_, n) => n !== i))}><Trash2 size={15} /></button>}</div>)}</div><datalist id="material-options">{materials.map((m, i) => <option key={i} value={m.codMaterial || m.codigo || Object.values(m)[0]}>{m.descripcion || m.nombre}</option>)}</datalist>{error && <p className="alert error">{error}</p>}<footer className="modal-actions"><button type="button" className="secondary-button" onClick={onClose}>Cancelar</button><button className="primary-button" disabled={busy}>{busy ? 'Guardando…' : 'Guardar requisición'} →</button></footer></form></section></div>;
-}
-
-export function DetailModal({ item, onClose, onEdit, onCancel, onDelete }: { item: Requisition; onClose: () => void; onEdit: () => void; onCancel: () => void; onDelete: () => void }) {
+export function DetailModal({ item, sociedad, onClose, onEdit, onCancel }: { item: Requisition; sociedad: string; onClose: () => void; onEdit: () => void; onCancel: () => void }) {
   const cancelled = item.estado === 'ANULADO';
-  return <div className="modal-backdrop"><section className="modal detail-modal"><header className="modal-head"><div><p className="eyebrow">Detalle de requisición</p><h2>{item.nroDoc}</h2></div><button className="close-button" onClick={onClose}><X size={19} /></button></header><div className="detail-summary"><div><small>Centro de costo</small><strong>{item.ccodCencos}</strong></div><div><small>Fecha</small><strong>{dateLabel(item.fecDoc)}</strong></div><div><small>Estado</small><strong>{cancelled ? 'Anulado' : item.estado || 'Pendiente'}</strong></div></div><div className="detail-items"><h3>Artículos ({item.detalles.length})</h3>{item.detalles.map((d, i) => <div className="detail-item" key={i}><b>{i + 1}</b><span>{d.codMaterial || 'Sin código'}<small>{d.cUnidad}</small></span><strong>{d.cantid}</strong></div>)}</div><footer className="modal-actions"><button className="secondary-button danger" disabled={cancelled} onClick={onDelete}><Trash2 size={15} /> Eliminar</button><button className="secondary-button" disabled={cancelled} onClick={onCancel}><Ban size={15} /> Anular</button><button className="primary-button" disabled={cancelled} onClick={onEdit}><Pencil size={15} /> Editar</button></footer></section></div>;
-}
-
-function Dashboard({ session, logout }: { session: Session; logout: () => void }) {
-  const [items, setItems] = useState<Requisition[]>([]); const [page, setPage] = useState(0); const [total, setTotal] = useState(0); const [pages, setPages] = useState(0); const [query, setQuery] = useState(''); const [loading, setLoading] = useState(true); const [notice, setNotice] = useState(''); const [editor, setEditor] = useState<Requisition | 'new' | null>(null); const [selected, setSelected] = useState<Requisition | null>(null);
-  async function load() { setLoading(true); try { const result = await api.list(session.sociedadActual, page, 8, query); setItems(result.content || []); setTotal(result.totalElements || 0); setPages(result.totalPages || 0); } catch { setNotice('No se pudo conectar con el backend.'); } finally { setLoading(false); } }
-  useEffect(() => { load(); }, [page]);
-  async function inspect(item: Requisition) { if (item.nroDoc) try { setSelected(await api.get(session.sociedadActual, item.nroDoc)); } catch { setNotice('No se pudo cargar el detalle.'); } }
-  async function remove(action: 'cancel' | 'delete') { if (!selected?.nroDoc) return; const message = action === 'cancel' ? '¿Anular esta requisición?' : '¿Eliminar esta requisición?'; if (!confirm(message)) return; try { if (action === 'cancel') await api.cancel(session.sociedadActual, selected.nroDoc); else await api.remove(session.sociedadActual, selected.nroDoc); setSelected(null); setNotice(action === 'cancel' ? 'Requisición anulada.' : 'Requisición eliminada.'); load(); } catch { setNotice('La operación no pudo completarse.'); } }
-  function search(e: FormEvent) { e.preventDefault(); setPage(0); load(); }
-  return <div className="app-shell"><AppSidebar session={session} active="historial" total={total} onGoHistorial={() => {}} onGoRequisiciones={() => setEditor('new')} onLogout={logout} /><main className="main-content"><header className="topbar"><div><p className="breadcrumb">Compras <span>/</span> Requisiciones</p><h1>Requisiciones de compra</h1></div><div className="top-actions"><span className="society-badge">● {session.sociedadActual}</span><div className="avatar">{session.username[0]}</div></div></header><section className="page-body"><div className="intro-row"><p className="muted">Administra y da seguimiento a las solicitudes de compra.</p><button className="primary-button compact" onClick={() => setEditor('new')}><Plus size={17} /> Nueva requisición</button></div>{notice && <div className="alert success">{notice}<button onClick={() => setNotice('')}><X size={15} /></button></div>}<div className="stats"><div className="stat-card"><b className="stat-icon teal">▣</b><div><small>Total requisiciones</small><strong>{total}</strong></div></div><div className="stat-card"><b className="stat-icon amber">◷</b><div><small>En proceso</small><strong>{items.filter(i => i.estado !== 'A' && i.estado !== 'ANULADO').length}</strong></div></div><div className="stat-card"><b className="stat-icon green">✓</b><div><small>Sociedad activa</small><strong>{session.sociedadActual}</strong></div></div></div><div className="table-card"><div className="table-toolbar"><div><h2>Listado de requisiciones</h2><span className="muted">Solicitudes de la sociedad activa</span></div><form className="search-box" onSubmit={search}><Search size={16} /><input value={query} onChange={e => setQuery(e.target.value)} placeholder="Buscar por número…" /><button>↵</button></form><button className="icon-button" onClick={load}><RefreshCw size={16} /></button></div><div className="table-wrap"><table><thead><tr><th>Documento</th><th>Fecha</th><th>Centro de costo</th><th>Prioridad</th><th>Estado</th><th>Acciones</th></tr></thead><tbody>{loading ? <tr><td colSpan={6} className="empty">Cargando…</td></tr> : items.length === 0 ? <tr><td colSpan={6} className="empty">No hay requisiciones.</td></tr> : items.map(item => <tr key={item.nroDoc}><td><strong className="doc-number">{item.nroDoc}</strong></td><td>{dateLabel(item.fecDoc)}</td><td>{item.ccodCencos}</td><td><span className="priority">{item.tipPrio || 'Normal'}</span></td><td><span className={`status ${item.estado === 'ANULADO' ? 'pending' : 'approved'}`}>{item.estado || 'Pendiente'}</span></td><td className="row-actions"><button title="Ver detalle" onClick={() => inspect(item)}><Eye size={15} /></button><button title="Editar" onClick={() => inspect(item).then(() => setEditor(item))}><Pencil size={15} /></button></td></tr>)}</tbody></table></div><div className="pagination"><span>Mostrando {items.length} de {total}</span><div><button disabled={page === 0} onClick={() => setPage(page - 1)}><ChevronLeft size={16} /></button><b>{pages ? page + 1 : 0} / {pages}</b><button disabled={page + 1 >= pages} onClick={() => setPage(page + 1)}><ChevronRight size={16} /></button></div></div></div></section></main>{editor && <RequisitionForm session={session} initial={editor === 'new' ? undefined : (selected || undefined)} onClose={() => setEditor(null)} onSaved={() => { setEditor(null); setSelected(null); setNotice('Requisición guardada correctamente.'); load(); }} />}{selected && !editor && <DetailModal item={selected} onClose={() => setSelected(null)} onEdit={() => setEditor(selected)} onCancel={() => remove('cancel')} onDelete={() => remove('delete')} />}</div>;
+  const [names, setNames] = useState({ centers: {} as Record<string, string>, people: {} as Record<string, string>, priorities: {} as Record<string, string>, suppliers: {} as Record<string, string>, materials: {} as Record<string, string> });
+  useEffect(() => {
+    api.centers(sociedad).then(v => setNames(n => ({ ...n, centers: Object.fromEntries(v.map(x => [x.ccodCencos, x.nomCencos])) }))).catch(() => []);
+    api.people(sociedad).then(v => setNames(n => ({ ...n, people: Object.fromEntries(v.map(x => [x.ccodPerson, x.nomPerson])) }))).catch(() => []);
+    api.priorities(sociedad).then(v => setNames(n => ({ ...n, priorities: Object.fromEntries(v.map(x => [x.cvalor, x.cnomValor])) }))).catch(() => []);
+    api.suppliers().then(v => setNames(n => ({ ...n, suppliers: Object.fromEntries(v.map(x => [x.ccodProveedor, x.nomProv])) }))).catch(() => []);
+    const codes = [...new Set((item.detalles || []).map(d => d.codMaterial).filter(Boolean))] as string[];
+    Promise.all(codes.map(async code => {
+      try {
+        const found = await api.materials(code);
+        const match = found.find(m => m.codMaterial === code);
+        return [code, match?.nomMaterial || code] as const;
+      } catch { return [code, code] as const; }
+    })).then(entries => setNames(n => ({ ...n, materials: { ...n.materials, ...Object.fromEntries(entries) } })));
+  }, [sociedad, item]);
+  const centerName = names.centers[item.ccodCencos] || item.ccodCencos;
+  const personName = item.ccodPerson ? names.people[item.ccodPerson] || item.ccodPerson : '—';
+  const prioName = item.tipPrio ? names.priorities[item.tipPrio] || item.tipPrio : 'NORMAL';
+  const supplierName = item.ccodProveedor ? names.suppliers[item.ccodProveedor] || item.ccodProveedor : '—';
+  const field = (label: string, value: React.ReactNode) => <div><small>{label}</small><strong>{value}</strong></div>;
+  return (
+    <div className="modal-backdrop">
+      <section className="modal detail-modal">
+        <header className="modal-head">
+          <div>
+            <p className="eyebrow">Detalle de requisición</p>
+            <h2>{item.nroDoc}</h2>
+          </div>
+          <button className="close-button" onClick={onClose} title="Cerrar"><X size={19} /></button>
+        </header>
+        <div className="detail-status">
+          <span className={`blue-status ${cancelled ? 'cancelled' : ''}`}>{cancelled ? 'Anulado' : item.estado || 'Pendiente'}</span>
+          <small>Sociedad {item.codSociedad}</small>
+        </div>
+        <div className="detail-grid">
+          {field('Nro Doc', item.nroDoc || '—')}
+          {field('Fecha documento', dateLabel(item.fecDoc))}
+          {field('Fecha requerida', dateLabel(item.fecReq))}
+          {field('Centro de costo', `${item.ccodCencos} - ${centerName}`)}
+          {field('Personal', personName)}
+          {field('Prioridad', prioName)}
+          {field('Proveedor sugerido', item.ccodProveedor ? `${item.ccodProveedor} - ${supplierName}` : '—')}
+          {field('Lugar de entrega', item.lugarEntr || '—')}
+          {field('Observaciones', item.observ || '—')}
+        </div>
+        <div className="detail-items">
+          <h3>Artículos ({item.detalles?.length || 0})</h3>
+          <table className="detail-table">
+            <thead><tr><th>#</th><th>Código</th><th>Material</th><th>Unidad</th><th>Cantidad</th><th>Recibido</th><th>Proveedor</th></tr></thead>
+            <tbody>
+              {(item.detalles || []).flatMap((d, i) => {
+                const rows = [(
+                  <tr key={`${i}`}>
+                    <td>{i + 1}</td>
+                    <td>{d.codMaterial || '*'}</td>
+                    <td>
+                      <strong>{d.codMaterial ? names.materials[d.codMaterial] || d.codMaterial : d.observ || '*'}</strong>
+                    </td>
+                    <td>{d.cUnidad}</td>
+                    <td className="num">{Number(d.cantid).toFixed(2)}</td>
+                    <td className="num">{Number(d.ncantidadRecibida || 0).toFixed(2)}</td>
+                    <td>{d.ccodProveedor ? names.suppliers[d.ccodProveedor] || d.ccodProveedor : '—'}</td>
+                  </tr>
+                )];
+                if (d.codMaterial) {
+                  (d.observ || '').split('\n').map(l => l.trim()).filter(l => l !== '').forEach((text, n) => {
+                    rows.push((
+                      <tr key={`${i}-${n}`} className="note-row">
+                        <td />
+                        <td />
+                        <td className="note-text">• {text}</td>
+                        <td />
+                        <td className="num">,00</td>
+                        <td className="num">0.00</td>
+                        <td />
+                      </tr>
+                    ));
+                  });
+                }
+                return rows;
+              })}
+            </tbody>
+          </table>
+        </div>
+        <footer className="modal-actions">
+          <button className="secondary-button" onClick={onClose}><X size={15} /> Cerrar</button>
+          <button className="secondary-button" disabled={cancelled} onClick={onCancel}><Ban size={15} /> Anular</button>
+          <button className="primary-button" disabled={cancelled} onClick={onEdit}><Pencil size={15} /> Editar</button>
+        </footer>
+      </section>
+    </div>
+  );
 }
 
 export default function AppComplete() { const [session, setSession] = useState<Session | null>(() => { const raw = localStorage.getItem('evo_session'); return raw ? JSON.parse(raw) : null; }); const [logged, setLogged] = useState(() => Boolean(localStorage.getItem('evo_token'))); function done(s: Session) { setSession(s); setLogged(true); localStorage.setItem('evo_session', JSON.stringify(s)); } function logout() { localStorage.clear(); setSession(null); setLogged(false); } if (!logged || !session) return <SignIn done={done} />; if (!session.sociedadActual) return <Society session={session} done={done} cancel={logout} />; return <RequisitionDashboard session={session} logout={logout} />; }
