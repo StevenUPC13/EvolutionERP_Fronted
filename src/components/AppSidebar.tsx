@@ -50,9 +50,6 @@ export default function AppSidebar({
         >
           Requisiciones {total != null && <b>{total}</b>}
         </a>
-        <a className="is-disabled" aria-disabled="true">
-          Catálogos
-        </a>
       </nav>
       <div className="blue-user">
         <div className="avatar">{session.username[0]}</div>
