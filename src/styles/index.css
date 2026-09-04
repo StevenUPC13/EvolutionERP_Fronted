@@ -1,0 +1,22 @@
+/* Punto único para estilos de la aplicación. */
+@import '../styles.css';
+@import '../complete.css';
+@import './logos.css';
+@import './session-actions.css';
+@import './auth-scale.css';
+@import './requisition-blue.css';
+@import './dashboard-scale.css';
+@import './search-fix.css';
+@import './requisition-editor.css';
+@import './requisition-status.css';
+@import './requisition-history.css';
+@import './history-filters-fix.css';
+@import './history-columns.css';
+@import './history-columns-fix.css';
+@import './history-typography.css';
+@import './history-viewport-scale.css';
+@import './history-table-fit.css';
+@import './action-alignment.css';
+@import './editor-sidebar.css';
+@import './editor-header-clean.css';
+@import './app-sidebar.css';

@@ -1,0 +1,1 @@
+{"root":["./src/app.tsx","./src/appcomplete.tsx","./src/api.ts","./src/main.tsx","./src/vite-env.d.ts","./src/components/appsidebar.tsx","./src/hooks/usesession.ts","./src/pages/app.tsx","./src/pages/requisitiondashboard.tsx","./src/pages/requisitioneditor.tsx","./src/pages/requisitioneditorpage.tsx","./src/services/api.ts"],"version":"5.9.3"}

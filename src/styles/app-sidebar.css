@@ -1,0 +1,23 @@
+/* Barra lateral única del módulo de requisiciones (Historial y Registrar). */
+.app-sidebar{width:208px;flex:0 0 208px;height:100vh;height:100dvh;position:sticky;top:0;overflow-y:auto;background:#fff;border-right:1px solid #dce6e8;padding:25px 15px;display:flex;flex-direction:column;flex-shrink:0}
+.app-sidebar nav{margin-top:58px;display:flex;flex-direction:column;gap:3px}
+.app-sidebar nav a{display:block;padding:11px 11px;border-radius:7px;color:#4b6870;font-size:12px;font-weight:600;cursor:pointer}
+.app-sidebar nav a.active,.app-sidebar nav a:not(.is-disabled):hover{background:#e9f6f4;color:#0d817b}
+.app-sidebar nav a.is-disabled{cursor:default}
+.app-sidebar nav a.is-disabled:hover{background:none;color:#4b6870}
+.app-sidebar nav b{float:right;background:#cfeeea;color:#0f817a;border-radius:10px;padding:2px 6px;font-size:10px}
+.app-sidebar .blue-user{margin-top:auto}
+@media(min-width:1001px){
+  .app-sidebar{width:225px;flex-basis:225px;padding:30px 18px}
+  .app-sidebar nav{margin-top:68px}
+  .app-sidebar nav a{padding:14px 12px;font-size:14px}
+  .app-sidebar nav b{font-size:11px;padding:3px 7px}
+}
+@media(max-width:700px){
+  .app-sidebar{width:65px;flex-basis:65px;padding:22px 8px}
+  .app-sidebar .blue-brand strong,.app-sidebar nav a:not(.active),.app-sidebar .blue-user>div:not(.avatar){display:none}
+  .app-sidebar .blue-brand{padding:0;justify-content:center}
+  .app-sidebar nav{margin-top:45px}
+  .app-sidebar nav a.active{font-size:0}
+  .app-sidebar nav a.active:before{content:'▣';font-size:19px}
+}

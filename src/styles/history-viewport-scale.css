@@ -1,0 +1,4 @@
+/* La vista de historial usa una escala equivalente al zoom visual cómodo del mockup. */
+@media (min-width:1001px){
+  .blue-erp-shell{zoom:1.1;width:100%;min-height:90.9091vh}
+}

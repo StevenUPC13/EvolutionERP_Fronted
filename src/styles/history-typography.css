@@ -1,0 +1,28 @@
+/* Escala tipográfica uniforme exclusiva de Historial. */
+.history-content{font-size:13px}
+.history-content .history-filter-title h2{font-size:16px}
+.history-content .history-filter-title small{font-size:11px}
+.history-content .history-filters label{font-size:11px}
+.history-content .history-filters input,
+.history-content .history-filters select,
+.history-content .history-search input{font-size:13px}
+.history-content .history-clear,
+.history-content .history-search-button{font-size:12px}
+.history-content .history-table-head h2{font-size:18px}
+.history-content .history-table-head small{font-size:11px}
+.history-content .history-create-link{font-size:13px}
+.history-content .history-table th{font-size:10px}
+.history-content .history-table td{font-size:13px}
+.history-content .history-table td small{font-size:10px}
+.history-content .history-table td .blue-status{font-size:11px}
+.history-content .history-actions button{font-size:12px}
+.history-content .history-pagination{font-size:11px}
+.history-content .history-pagination b,
+.history-content .history-pagination button{font-size:11px}
+.history-content .history-pagination button{line-height:1.2}
+.history-content .history-subtitle{font-size:11px}
+@media(max-width:700px){
+  .history-content .history-table td{font-size:12px}
+  .history-content .history-table td small{font-size:10px}
+  .history-content .history-filter-title h2{font-size:15px}
+}
